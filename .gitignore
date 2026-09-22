@@ -1,0 +1,28 @@
+# Salesforce CLI state and local org credentials
+/.sf/
+/.sfdx/
+/.testdata/
+
+# Local tooling and editor state
+/.agents/
+/.backup/
+/.vscode/
+/skills-lock.json
+*.log
+.eslintcache
+
+# JavaScript dependencies and generated output
+/node_modules/
+/coverage/
+/artifacts/
+
+# Local environment and credential files
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# Operating-system files
+.DS_Store
+Thumbs.db

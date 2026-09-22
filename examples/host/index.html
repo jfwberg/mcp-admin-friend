@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MCP Admin Friend · Lightning Out test host</title>
+    <style>
+        body { max-width: 1100px; margin: 24px auto; padding: 0 16px; font: 14px system-ui; color: #181818; }
+        .configuration { display: grid; grid-template-columns: minmax(190px, .7fr) minmax(280px, 2fr) auto; gap: 12px; align-items: end; margin: 20px 0; padding: 16px; border: 1px solid #c9c9c9; border-radius: 8px; background: #f7f7f7; }
+        .configuration label { display: grid; gap: 5px; font-weight: 600; }
+        .configuration input { box-sizing: border-box; width: 100%; padding: 8px; font: inherit; }
+        .configuration small { grid-column: 1 / -1; color: #5c5c5c; }
+        .composer { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(220px, 1fr) auto; gap: 12px; align-items: end; margin: 0 0 16px; padding: 16px; border: 1px solid #c9c9c9; border-radius: 8px; }
+        .composer h2, .composer p, .composer .payload { grid-column: 1 / -1; margin: 0; }
+        .composer label { display: grid; gap: 5px; font-weight: 600; }
+        .composer input, .composer select, .composer textarea { box-sizing: border-box; width: 100%; padding: 8px; font: inherit; }
+        .composer textarea { min-height: 110px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+        main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 20px; }
+        #mount { min-height: 600px; border: 1px dashed #888; border-radius: 8px; padding: 8px; }
+        .trace-panel { min-width: 0; }
+        .trace-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        #trace { max-height: 540px; overflow: auto; }
+        .trace-entry { margin-bottom: 8px; border: 1px solid #c9c9c9; border-radius: 6px; background: #fff; }
+        .trace-entry summary { cursor: pointer; padding: 10px; overflow-wrap: anywhere; }
+        .trace-entry[data-direction="host-to-lwc"] summary { border-left: 4px solid #2e844a; }
+        .trace-entry[data-direction="lwc-to-host"] summary { border-left: 4px solid #0176d3; }
+        .trace-entry pre { margin: 0; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #f3f3f3; }
+        .empty { color: #5c5c5c; padding: 12px 0; }
+        button { padding: 8px; margin: 4px 0; }
+        @media (max-width: 720px) {
+            main, .configuration, .composer { grid-template-columns: 1fr; }
+            .configuration small, .composer h2, .composer p, .composer .payload { grid-column: 1; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Lightning Out test host</h1>
+    <p>Enter the Lightning Out 2.0 app details to load <code>x007-mcp-admin-friend</code>. See the project README for setup.</p>
+    <form id="configuration" class="configuration">
+        <label>Lightning Out app ID
+            <input id="app-id" name="app-id" required minlength="18" maxlength="18" pattern="[A-Za-z0-9]{18}" placeholder="1Us…" autocomplete="off">
+        </label>
+        <label>Frontdoor URL
+            <input id="frontdoor-url" name="frontdoor-url" type="password" required placeholder="https://MyDomain.my.salesforce.com/secur/frontdoor.jsp?otp=…" autocomplete="off" spellcheck="false">
+        </label>
+        <button id="start" type="submit">Start Lightning Out</button>
+        <small>Each frontdoor URL can be used for one startup attempt only. Generate a fresh URL after a failed attempt or page refresh. The URL is kept only in memory and is not saved, shown in the trace, or written to the console.</small>
+    </form>
+    <form id="composer" class="composer">
+        <h2>Send a host action</h2>
+        <p>Choose an example, edit its action type or JSON payload, and send it to the component.</p>
+        <label>Example
+            <select id="action-example">
+                <option value="object.select">Select Opportunity</option>
+                <option value="tab.records">Open Recent Records</option>
+                <option value="context.refresh">Refresh Context</option>
+                <option value="metadata.refresh">Refresh Metadata</option>
+                <option value="records.refresh">Refresh Recent Records</option>
+                <option value="tab.admin">Open Admin Tab</option>
+                <option value="tab.metadata">Open Metadata Tab</option>
+                <option value="ui.notify">Show Notification</option>
+                <option value="custom">Custom</option>
+            </select>
+        </label>
+        <label>Action type
+            <input id="action-type" required value="object.select" autocomplete="off" spellcheck="false">
+        </label>
+        <button id="send-action" type="submit" disabled>Send Action</button>
+        <label class="payload">Payload (JSON object)
+            <textarea id="action-payload" required spellcheck="false">{
+  "objectApiName": "Opportunity"
+}</textarea>
+        </label>
+    </form>
+    <p id="status" role="status">Waiting for your Lightning Out embed configuration.</p>
+    <main>
+        <section id="mount" aria-label="Salesforce component">
+            <p class="empty">Enter the app ID and frontdoor URL, then start Lightning Out.</p>
+        </section>
+        <section class="trace-panel">
+            <div class="trace-heading"><h2>Session event trace</h2><button id="clear" type="button">Clear</button></div>
+            <p>Newest first · maximum 50 entries · cleared on refresh</p>
+            <div id="trace" aria-live="polite"><p class="empty">No events yet.</p></div>
+        </section>
+    </main>
+    <script type="module">
+        import { attachAdminFriend } from './admin-friend-host.js';
+        const SALESFORCE_COMPONENT_NAME = 'x007-mcp-admin-friend';
+        const COMPONENT_TAG_NAME = 'x007-mcp-admin-friend';
+        const LIGHTNING_OUT_PATH = '/lightning/lightning.out.latest/index.iife.prod.js';
+        let bridge;
+        let lightningOutScriptPromise;
+        let startupAttempted = false;
+        const trace = [];
+        const traceElement = document.querySelector('#trace');
+        const status = document.querySelector('#status');
+        const mount = document.querySelector('#mount');
+        const startButton = document.querySelector('#start');
+        const sendButton = document.querySelector('#send-action');
+        const actionExample = document.querySelector('#action-example');
+        const actionType = document.querySelector('#action-type');
+        const actionPayload = document.querySelector('#action-payload');
+        const ACTION_EXAMPLES = {
+            'object.select': { type: 'object.select', payload: { objectApiName: 'Opportunity' } },
+            'tab.records': { type: 'tab.select', payload: { tab: 'records' } },
+            'context.refresh': { type: 'context.refresh', payload: {} },
+            'metadata.refresh': { type: 'metadata.refresh', payload: {} },
+            'records.refresh': { type: 'records.refresh', payload: {} },
+            'tab.admin': { type: 'tab.select', payload: { tab: 'admin' } },
+            'tab.metadata': { type: 'tab.select', payload: { tab: 'metadata' } },
+            'ui.notify': { type: 'ui.notify', payload: { message: 'Hello from the Lightning Out host' } }
+        };
+
+        function displayLifecycleError(prefix, event) {
+            const message = event.detail?.message || 'Unknown Lightning Out error.';
+            status.textContent = `${prefix}: ${message}`;
+            console.error(`[MCP Admin Friend] ${prefix}`, message, event.detail?.originalError);
+        }
+
+        function loadLightningOutScript(origin) {
+            if (customElements.get('lightning-out-application')) {
+                return Promise.resolve();
+            }
+            if (lightningOutScriptPromise) {
+                return lightningOutScriptPromise;
+            }
+            lightningOutScriptPromise = new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = `${origin}${LIGHTNING_OUT_PATH}`;
+                script.async = true;
+                script.addEventListener('load', resolve, { once: true });
+                script.addEventListener('error', () => reject(new Error('The Lightning Out library could not be loaded from the Salesforce domain.')), { once: true });
+                document.head.append(script);
+            });
+            return lightningOutScriptPromise;
+        }
+
+        function renderTrace() {
+            traceElement.replaceChildren();
+            if (!trace.length) {
+                const empty = document.createElement('p');
+                empty.className = 'empty';
+                empty.textContent = 'No events yet.';
+                traceElement.append(empty);
+                return;
+            }
+            for (const entry of trace) {
+                const details = document.createElement('details');
+                details.className = 'trace-entry';
+                details.dataset.direction = entry.direction;
+                const summary = document.createElement('summary');
+                const arrow = entry.direction === 'host-to-lwc' ? 'Host → LWC' : 'LWC → Host';
+                const time = new Date(entry.envelope.timestamp).toLocaleTimeString();
+                summary.textContent = `${time} · ${arrow} · ${entry.envelope.type} · ${entry.envelope.correlationId}`;
+                const json = document.createElement('pre');
+                json.textContent = JSON.stringify(entry.envelope, null, 2);
+                details.append(summary, json);
+                traceElement.append(details);
+            }
+        }
+
+        function addTrace(entry) {
+            trace.unshift(entry);
+            trace.length = Math.min(trace.length, 50);
+            renderTrace();
+            if (entry.envelope.type === 'component.ready') {
+                status.textContent = 'Salesforce component is ready for commands.';
+                sendButton.disabled = false;
+            }
+        }
+
+        document.querySelector('#clear').addEventListener('click', () => {
+            trace.length = 0;
+            renderTrace();
+            console.info('[MCP Admin Friend] Session trace cleared');
+        });
+
+        document.querySelector('#configuration').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            try {
+                const appId = document.querySelector('#app-id').value.trim();
+                const frontdoorInput = document.querySelector('#frontdoor-url');
+                const frontdoor = new URL(frontdoorInput.value.trim());
+                if (!/^[A-Za-z0-9]{18}$/.test(appId)) {
+                    throw new Error('Enter the 18-character Lightning Out app ID.');
+                }
+                if (frontdoor.protocol !== 'https:') {
+                    throw new Error('The frontdoor URL must use HTTPS.');
+                }
+                if (!frontdoor.hostname.endsWith('.my.salesforce.com') || frontdoor.pathname !== '/secur/frontdoor.jsp') {
+                    throw new Error('Enter the complete frontdoor URL returned by the Salesforce UI Bridge API.');
+                }
+                if (startupAttempted) {
+                    throw new Error('Lightning Out startup has already been attempted. Refresh the page before trying again.');
+                }
+
+                startupAttempted = true;
+                startButton.disabled = true;
+                status.textContent = 'Loading the Lightning Out library…';
+                mount.replaceChildren();
+
+                await loadLightningOutScript(frontdoor.origin);
+                await customElements.whenDefined('lightning-out-application');
+
+                const application = document.createElement('lightning-out-application');
+                application.addEventListener('lo.application.ready', () => {
+                    status.textContent = 'Salesforce session established. Loading MCP Admin Friend…';
+                    console.info('[MCP Admin Friend] Lightning Out application ready');
+                });
+                application.addEventListener('lo.application.error', (lifecycleEvent) => {
+                    displayLifecycleError('Lightning Out application error', lifecycleEvent);
+                });
+
+                // Configure the app completely before connecting it to the document.
+                // The components attribute registers the fixed component to this app.
+                application.setAttribute('app-id', appId);
+                application.setAttribute('components', SALESFORCE_COMPONENT_NAME);
+                application.setAttribute('frontdoor-url', frontdoor.href);
+                frontdoorInput.value = '';
+                mount.append(application);
+
+                await customElements.whenDefined(COMPONENT_TAG_NAME);
+                const component = document.createElement(COMPONENT_TAG_NAME);
+                component.addEventListener('lo.component.ready', () => {
+                    status.textContent = 'MCP Admin Friend is ready.';
+                    sendButton.disabled = false;
+                    console.info('[MCP Admin Friend] Lightning Out component ready');
+                });
+                component.addEventListener('lo.component.error', (lifecycleEvent) => {
+                    displayLifecycleError('Lightning Out component error', lifecycleEvent);
+                });
+
+                // The upgraded element can now mirror this listener into the LWC.
+                bridge = attachAdminFriend(component, addTrace);
+                mount.append(component);
+                status.textContent = 'Establishing the Salesforce session…';
+            } catch (error) {
+                status.textContent = error.message;
+                console.error('[MCP Admin Friend] Startup error', error);
+                if (!startupAttempted) {
+                    startButton.disabled = false;
+                } else {
+                    status.textContent += ' Refresh the page before trying again.';
+                }
+            }
+        });
+        function applyExample(key) {
+            const example = ACTION_EXAMPLES[key];
+            if (!example) return;
+            actionType.value = example.type;
+            actionPayload.value = JSON.stringify(example.payload, null, 2);
+        }
+        actionExample.addEventListener('change', () => applyExample(actionExample.value));
+        actionType.addEventListener('input', () => { actionExample.value = 'custom'; });
+        actionPayload.addEventListener('input', () => { actionExample.value = 'custom'; });
+        document.querySelector('#composer').addEventListener('submit', (event) => {
+            event.preventDefault();
+            try {
+                const type = actionType.value.trim();
+                const payload = JSON.parse(actionPayload.value);
+                if (!type) throw new Error('Enter an action type.');
+                if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+                    throw new Error('The payload must be a JSON object.');
+                }
+                const result = bridge.send(type, payload);
+                status.textContent = `Dispatched ${result.type} (${result.correlationId}).`;
+            } catch (error) {
+                status.textContent = `Action was not sent: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>

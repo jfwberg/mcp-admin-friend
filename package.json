@@ -1,0 +1,12 @@
+{
+  "name": "mcp-admin-friend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "sfdx-lwc-jest -- --runInBand",
+    "test:coverage": "sfdx-lwc-jest -- --runInBand --coverage"
+  },
+  "devDependencies": {
+    "@salesforce/sfdx-lwc-jest": "^7.9.0"
+  }
+}

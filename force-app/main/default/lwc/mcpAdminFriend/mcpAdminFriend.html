@@ -1,0 +1,110 @@
+<template>
+    <article class="friend slds-card" aria-label="MCP Admin Friend">
+        <header class="heading">
+            <lightning-icon icon-name="utility:setup" size="small" alternative-text="Administration"></lightning-icon>
+            <div class="heading-copy"><h1>MCP Admin Friend</h1><p>Your Salesforce administration companion</p></div>
+            <span class="readiness"><span class="status-dot"></span>{readiness}</span>
+        </header>
+        <div class="notification" role="status" title={notification}>{notification}</div>
+        <div class="selection-bar">
+            <template lwc:if={selectedObject}>
+                <span>Selected object</span><strong>{selectedObject.label}</strong><code>{selectedObject.apiName}</code>
+            </template>
+            <template lwc:else><span>Select an object to unlock metadata and recent records.</span></template>
+        </div>
+        <div class="tabs" role="tablist" aria-label="Administration views">
+            <button id="admin-tab" role="tab" type="button" aria-controls="admin-panel" aria-selected={isAdmin}
+                tabindex={adminTabIndex} data-tab="admin" onclick={handleTabSelect} onkeydown={handleTabKeydown}>Admin &amp; Objects</button>
+            <button id="metadata-tab" role="tab" type="button" aria-controls="metadata-panel" aria-selected={isMetadata}
+                tabindex={metadataTabIndex} data-tab="metadata" disabled={noObject} onclick={handleTabSelect} onkeydown={handleTabKeydown}>Metadata</button>
+            <button id="records-tab" role="tab" type="button" aria-controls="records-panel" aria-selected={isRecords}
+                tabindex={recordsTabIndex} data-tab="records" disabled={noObject} onclick={handleTabSelect} onkeydown={handleTabKeydown}>Recent Records</button>
+        </div>
+        <div class="content">
+            <section id="admin-panel" role="tabpanel" aria-labelledby="admin-tab" hidden={isMetadata} lwc:if={isAdmin} class="panel" tabindex="0">
+                <div class="section-heading"><h2>Logged-in user</h2>
+                    <lightning-button-icon icon-name="utility:refresh" alternative-text="Refresh user context" title="Refresh user context"
+                        onclick={handleRefreshContext} disabled={contextLoading}></lightning-button-icon>
+                </div>
+                <template lwc:if={contextLoading}><div class="loading"><lightning-spinner size="small" alternative-text="Loading user context"></lightning-spinner></div></template>
+                <template lwc:if={contextError}><p class="error" role="alert">{contextError}</p></template>
+                <template lwc:if={context}>
+                    <dl class="context-grid"><template for:each={contextFields} for:item="field">
+                        <div key={field.key}><dt>{field.label}</dt><dd>{field.value}</dd></div>
+                    </template></dl>
+                </template>
+                <div class="section-heading objects-heading"><h2>Explore objects</h2>
+                    <lightning-button-icon icon-name="utility:refresh" alternative-text="Reload object selector" title="Reload object selector"
+                        onclick={handleRetryObjects} disabled={objectsLoading}></lightning-button-icon>
+                </div>
+                <lightning-input type="search" label="Find an object" placeholder="Search label or API name" value={objectSearch} onchange={handleObjectSearch}></lightning-input>
+                <p class="hint">{objectCountLabel}</p>
+                <template lwc:if={objectsLoading}><div class="loading"><lightning-spinner size="small" alternative-text="Loading objects"></lightning-spinner></div></template>
+                <template lwc:if={objectsError}><p class="error" role="alert">{objectsError}</p></template>
+                <template lwc:if={noObjectResults}><p class="empty">No accessible objects match your search.</p></template>
+                <ul class="object-list"><template for:each={visibleObjects} for:item="object">
+                    <li key={object.apiName}><button type="button" class="choice" data-name={object.apiName} aria-pressed={object.selected} onclick={handleObjectSelect}>
+                        <strong>{object.label}</strong><span>{object.apiName}</span>
+                    </button></li>
+                </template></ul>
+            </section>
+            <section id="metadata-panel" role="tabpanel" aria-labelledby="metadata-tab" lwc:if={isMetadata} class="panel metadata-panel" tabindex="0">
+                <div class="section-heading"><h2>{selectedObject.label} metadata</h2>
+                    <lightning-button-icon icon-name="utility:refresh" alternative-text="Refresh metadata" title="Refresh metadata"
+                        onclick={handleRefreshMetadata} disabled={metadataLoading}></lightning-button-icon>
+                </div>
+                <template lwc:if={metadataLoading}><div class="loading"><lightning-spinner size="small" alternative-text="Loading metadata"></lightning-spinner></div></template>
+                <template lwc:if={metadataError}><p class="error" role="alert">{metadataError}</p></template>
+                <template lwc:if={metadata}>
+                    <dl class="summary-grid"><template for:each={metadataSummary} for:item="item">
+                        <div key={item.key}><dt>{item.key}</dt><dd>{item.value}</dd></div>
+                    </template></dl>
+                    <div class="badges"><template for:each={permissionBadges} for:item="badge"><lightning-badge key={badge.label} label={badge.text}></lightning-badge></template></div>
+                    <lightning-input type="search" label="Find a field" placeholder="Search label or API name" value={fieldSearch} onchange={handleFieldSearch}></lightning-input>
+                    <template lwc:if={noFields}><p class="empty">No readable fields match your search.</p></template>
+                    <div class="field-table" tabindex="0" role="region" aria-label="Readable fields, scroll for more columns">
+                        <table class="slds-table slds-table_bordered slds-table_cell-buffer">
+                            <caption class="slds-assistive-text">Readable fields. Select a field to send its metadata to the host.</caption>
+                            <thead><tr><th scope="col">Field / API name</th><th scope="col">Type</th><th scope="col">Length / precision, scale</th>
+                                <th scope="col">Required on create</th><th scope="col">Nillable</th><th scope="col">Kind</th><th scope="col">Createable</th><th scope="col">Updateable</th><th scope="col">References</th></tr></thead>
+                            <tbody><template for:each={visibleFields} for:item="field"><tr key={field.apiName}>
+                                <th scope="row"><button type="button" class="field-choice" data-name={field.apiName} aria-pressed={field.selected} onclick={handleFieldSelect}>
+                                    <strong>{field.label}</strong><span>{field.apiName}</span></button></th>
+                                <td><lightning-badge label={field.dataType}></lightning-badge></td><td>{field.size}</td><td>{field.required}</td><td>{field.nullable}</td>
+                                <td>{field.kind}</td><td>{field.createable}</td><td>{field.updateable}</td><td>{field.references}</td>
+                            </tr></template></tbody>
+                        </table>
+                    </div>
+                </template>
+            </section>
+            <section id="records-panel" role="tabpanel" aria-labelledby="records-tab" lwc:if={isRecords} class="panel" tabindex="0">
+                <div class="section-heading"><h2>Recent {selectedObject.pluralLabel}</h2>
+                    <lightning-button-icon icon-name="utility:refresh" alternative-text="Refresh recent records" title="Refresh recent records"
+                        onclick={handleRefreshRecords} disabled={recordsLoading}></lightning-button-icon>
+                </div>
+                <p class="hint">Up to 10 records · newest modified first when supported</p>
+                <template lwc:if={recordsLoading}><div class="loading"><lightning-spinner size="small" alternative-text="Loading recent records"></lightning-spinner></div></template>
+                <template lwc:if={recordsError}><p class="error" role="alert">{recordsError}</p></template>
+                <template lwc:if={noRecords}><div class="empty"><lightning-icon icon-name="utility:inbox" size="small" alternative-text="No records"></lightning-icon><p>No recent records are available for this object.</p></div></template>
+                <div class="records-layout">
+                    <ul class="record-list"><template for:each={recordItems} for:item="record"><li key={record.recordId}>
+                        <button type="button" class="choice" data-id={record.recordId} aria-pressed={record.selected} onclick={handleRecordSelect}>
+                            <strong>{record.displayLabel}</strong><span>{record.recordId}</span>
+                        </button>
+                    </li></template></ul>
+                    <template lwc:if={selectedRecord}>
+                        <section class="record-detail" aria-label="Selected record details">
+                            <h3>{selectedRecord.displayLabel}</h3>
+                            <dl><template for:each={recordDetails} for:item="field"><div key={field.apiName}>
+                                <dt>{field.label}</dt><dd>{field.value}</dd>
+                            </div></template></dl>
+                            <lightning-button variant="brand" label="Send record to MCP Client" onclick={handleSendRecord}></lightning-button>
+                            <p class="hint">Sends only the fields loaded for display.</p>
+                        </section>
+                    </template>
+                </div>
+            </section>
+        </div>
+        <footer>Authenticated Salesforce access <span>Read-only explorer</span></footer>
+    </article>
+</template>

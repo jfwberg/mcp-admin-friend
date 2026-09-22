@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
+    <classAccesses><apexClass>McpAdminFriendController</apexClass><enabled>true</enabled></classAccesses>
+    <description>Allows MCP Admin Friend controller access. Existing object, field and sharing permissions still apply.</description>
+    <label>MCP Admin Friend</label>
+</PermissionSet>
