@@ -4,6 +4,10 @@ MCP Admin Friend is an example Salesforce administrator Lightning Web Component 
 
 The `mcpAdminFriend` LWC provides a read-only view of Salesforce user context, object metadata, fields, and recent records. It communicates with its host through JSON-serializable custom events, providing a practical reference for building and testing exposed LWCs outside Salesforce.
 
+## Package Info
+Install the managed package using the following link
+`/packaging/installPackage.apexp?p0=04tP3000002D4HZIA0`
+
 ## Event envelope
 
 Input commands and output actions use the same envelope shape:
