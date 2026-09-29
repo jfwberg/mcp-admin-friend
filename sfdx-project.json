@@ -1,12 +1,18 @@
 {
   "packageDirectories": [
     {
-      "versionName": "67.0 - v0.1 - (xdemo)",
-      "versionNumber": "0.1.0.NEXT",
+      "versionName": "67.0 - v0.2 - (xdemo)",
+      "versionNumber": "0.2.0.NEXT",
       "path": "force-app",
       "default": true,
       "package": "MCP Admin Friend",
-      "versionDescription": "MCP Admin Friend is an example Salesforce administrator Lightning Web Component that demonstrates authenticated Lightning Out 2.0 components communicating with an MCP client through an MCP App Bridge."
+      "versionDescription": "MCP Admin Friend is an example Salesforce administrator Lightning Web Component that demonstrates authenticated Lightning Out 2.0 components communicating with an MCP client through an MCP App Bridge.",
+      "ancestorVersion": "HIGHEST",
+      "dependencies": [
+        {
+          "package": "MCP App Bridge@0.2.0-1"
+        }
+      ]
     }
   ],
   "name": "mcp-admin-friend",
@@ -15,6 +21,13 @@
   "sourceApiVersion": "67.0",
   "packageAliases": {
     "MCP Admin Friend": "0HoP3000000020DKAQ",
-    "MCP Admin Friend@0.1.0-1": "04tP3000002D4HZIA0"
+    "MCP Admin Friend@0.1.0-1": "04tP3000002D4HZIA0",
+    "MCP App Bridge@0.2.0-1": "04tP3000002E2YfIAK",
+    "MCP Admin Friend@0.2.0-1": "04tP3000002DV6TIAW",
+    "MCP Admin Friend@0.2.0-2": "04tP3000002DVRRIA4",
+    "MCP Admin Friend@0.2.0-3": "04tP3000002DvKHIA0",
+    "MCP Admin Friend@0.2.0-4": "04tP3000002DymoIAC",
+    "MCP Admin Friend@0.2.0-5": "04tP3000002E0WrIAK",
+    "MCP Admin Friend@0.2.0-7": "04tP3000002E2aHIAS"
   }
 }

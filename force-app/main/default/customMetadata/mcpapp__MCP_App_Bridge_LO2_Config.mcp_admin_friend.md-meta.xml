@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomMetadata xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>MCP Admin Friend</label>
+    <protected>false</protected>
+    <values><field>mcpapp__Enabled__c</field><value xsi:type="xsd:boolean" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">false</value></values>
+    <values><field>mcpapp__App_Id__c</field><value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema"></value></values>
+    <values><field>mcpapp__Component_Name__c</field><value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">xdemo-mcp-admin-friend</value></values>
+    <values><field>mcpapp__Resource_Uri__c</field><value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">ui://xdemo/mcp-admin-friend/v1/index.html</value></values>
+    <values><field>mcpapp__Static_Resource_Name__c</field><value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">McpLightningOutHost</value></values>
+    <values><field>mcpapp__Display_Name__c</field><value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">MCP Admin Friend</value></values>
+    <values><field>mcpapp__Description__c</field><value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">Read-only Salesforce administration explorer with optional initial object selection and JSON action events.</value></values>
+    <values><field>mcpapp__Input_Schema_JSON__c</field><value xsi:type="xsd:string" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">{&quot;type&quot;:&quot;object&quot;,&quot;additionalProperties&quot;:false,&quot;properties&quot;:{&quot;objectApiName&quot;:{&quot;type&quot;:&quot;string&quot;,&quot;minLength&quot;:1,&quot;description&quot;:&quot;Optional API name of an accessible Salesforce object to select when the widget opens.&quot;}}}</value></values>
+</CustomMetadata>

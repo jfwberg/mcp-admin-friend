@@ -5,7 +5,6 @@ import getMetadata from '@salesforce/apex/McpAdminFriendController.getMetadata';
 import getRecentRecords from '@salesforce/apex/McpAdminFriendController.getRecentRecords';
 
 const COMMON_OBJECTS = ['Account', 'Contact', 'Opportunity', 'Lead', 'Case', 'Task', 'User'];
-const COMMANDS = ['context.refresh', 'object.select', 'metadata.refresh', 'records.refresh', 'tab.select', 'ui.notify'];
 const clone = (value) => JSON.parse(JSON.stringify(value));
 let sequence = 0;
 const uniqueId = () => `adminfriend-${Date.now()}-${++sequence}-${Math.random().toString(36).slice(2)}`;
@@ -36,10 +35,15 @@ export default class McpAdminFriend extends LightningElement {
     _recordsRequest = 0;
     _selectionRequest = 0;
     _initialized = false;
-    _hostListener = (event) => { this.handleHostAction(event.detail); };
+    _objectApiName = '';
 
-    connectedCallback() {
-        this.addEventListener('adminfriendcommand', this._hostListener);
+    @api
+    get objectApiName() {
+        return this._objectApiName;
+    }
+    set objectApiName(value) {
+        this._objectApiName = typeof value === 'string' ? value.trim() : '';
+        if (this.ready && this._objectApiName) this.applyInitialObject();
     }
 
     renderedCallback() {
@@ -49,17 +53,21 @@ export default class McpAdminFriend extends LightningElement {
         }
     }
 
-    disconnectedCallback() {
-        this.removeEventListener('adminfriendcommand', this._hostListener);
-    }
-
     async initialize() {
         await Promise.all([this.loadContext(false), this.loadObjects()]);
+        if (this._objectApiName && !this.objectsError) await this.applyInitialObject();
         this.ready = true;
         this.notification = this.contextError || this.objectsError
-            ? 'Ready for commands. Some Salesforce data could not be loaded.'
+            ? 'Ready. Some Salesforce data could not be loaded.'
             : 'Ready. Select an object to explore Salesforce.';
-        this.emit('component.ready', { commands: COMMANDS, contextAvailable: Boolean(this.context) });
+    }
+
+    async applyInitialObject() {
+        try {
+            await this.selectObject(this._objectApiName, uniqueId(), 'initial.input');
+        } catch (error) {
+            this.notification = this.reportError('initial.object.select', error);
+        }
     }
 
     emit(type, payload, correlationId = uniqueId()) {
@@ -74,7 +82,6 @@ export default class McpAdminFriend extends LightningElement {
 
     reportError(operation, error, correlationId) {
         const message = error?.body?.message || error?.message || 'Salesforce data could not be loaded. Please retry.';
-        this.emit('component.error', { operation, message }, correlationId);
         return message;
     }
 
@@ -86,7 +93,6 @@ export default class McpAdminFriend extends LightningElement {
             const context = await getContext();
             if (request !== this._contextRequest) return false;
             this.context = clone(context);
-            this.emit(refresh ? 'context.refreshed' : 'context.loaded', this.context, correlationId);
             return true;
         } catch (error) {
             if (request === this._contextRequest) {
@@ -126,7 +132,6 @@ export default class McpAdminFriend extends LightningElement {
         this.selectedFieldName = undefined;
         this.fieldSearch = '';
         this.activeTab = 'metadata';
-        this.emit('object.selected', { object: clone(object), originatingAction }, correlationId);
         const results = await Promise.all([this.loadMetadata(correlationId), this.loadRecords(correlationId)]);
         return request === this._selectionRequest && results.every(Boolean);
     }
@@ -173,60 +178,6 @@ export default class McpAdminFriend extends LightningElement {
         }
     }
 
-    /** Same-context callers receive a Promise of a JSON-safe command result. */
-    @api
-    async handleHostAction(message) {
-        let type = 'unknown';
-        let correlationId = uniqueId();
-        try {
-            const parsedMessage = typeof message === 'string' ? JSON.parse(message) : message;
-            if (!parsedMessage || typeof parsedMessage !== 'object' || Array.isArray(parsedMessage)) throw new Error('Expected a command envelope.');
-            const command = clone(parsedMessage);
-            if (typeof command.type === 'string') type = command.type;
-            if (typeof command.correlationId === 'string' && command.correlationId.length <= 200) correlationId = command.correlationId;
-            if (command.version !== '1.0' || typeof command.source !== 'string' || !command.source.trim()
-                || typeof command.timestamp !== 'string' || !Number.isFinite(Date.parse(command.timestamp))
-                || typeof command.correlationId !== 'string' || !command.correlationId.trim() || command.correlationId.length > 200
-                || !command.payload || typeof command.payload !== 'object' || Array.isArray(command.payload)) {
-                throw new Error('Expected version 1.0, source, timestamp, correlationId, type and an object payload.');
-            }
-            if (!COMMANDS.includes(type)) throw new Error(`Unsupported command: ${type}`);
-            // Calls made before the first render also initialize deterministically.
-            if (!this._initialized) {
-                this._initialized = true;
-                this._initialization = this.initialize();
-            }
-            await this._initialization;
-            let success = true;
-            const payload = command.payload;
-            switch (type) {
-                case 'context.refresh': success = await this.loadContext(true, correlationId); break;
-                case 'object.select':
-                    if (typeof payload.objectApiName !== 'string') throw new Error('objectApiName must be a string.');
-                    success = await this.selectObject(payload.objectApiName, correlationId, 'host.object.select');
-                    break;
-                case 'metadata.refresh': success = await this.loadMetadata(correlationId); break;
-                case 'records.refresh': success = await this.loadRecords(correlationId); break;
-                case 'tab.select':
-                    if (!['admin', 'metadata', 'records'].includes(payload.tab)) throw new Error('tab must be admin, metadata or records.');
-                    if (payload.tab !== 'admin' && !this.selectedObject) throw new Error('Select an object first.');
-                    this.activeTab = payload.tab;
-                    break;
-                case 'ui.notify':
-                    if (typeof payload.message !== 'string' || !payload.message.trim() || payload.message.length > 500) {
-                        throw new Error('message must contain between 1 and 500 characters.');
-                    }
-                    this.notification = payload.message;
-                    break;
-                default: break;
-            }
-            return { success, type, correlationId, ...(success ? {} : { error: 'Request failed or was superseded by a newer request.' }) };
-        } catch (error) {
-            const description = this.reportError(type, error, correlationId);
-            return { success: false, type, correlationId, error: description };
-        }
-    }
-
     handleRefreshContext() { this.loadContext(true); }
     handleRetryObjects() { this.loadObjects(); }
     handleRefreshMetadata() { this.loadMetadata(); }
@@ -256,8 +207,7 @@ export default class McpAdminFriend extends LightningElement {
         const field = this.metadata?.fields.find((item) => item.apiName === event.currentTarget.dataset.name);
         if (!field) return;
         this.selectedFieldName = field.apiName;
-        this.emit('field.selected', { object: this.metadata.objectInfo, field, originatingAction: 'user.field.select' });
-        this.notification = `${field.label} selection sent to host.`;
+        this.notification = `${field.label} selected.`;
     }
     handleRecordSelect(event) {
         this.selectedRecord = this.records.find((item) => item.recordId === event.currentTarget.dataset.id);

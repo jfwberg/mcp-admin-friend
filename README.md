@@ -5,12 +5,26 @@ MCP Admin Friend is an example Salesforce administrator Lightning Web Component 
 The `mcpAdminFriend` LWC provides a read-only view of Salesforce user context, object metadata, fields, and recent records. It communicates with its host through JSON-serializable custom events, providing a practical reference for building and testing exposed LWCs outside Salesforce.
 
 ## Package Info
-Install the managed package using the following link
-`/packaging/installPackage.apexp?p0=04tP3000002D4HZIA0`
+**Dependency :: Mcp App Bridge - v67.0 - 0.2** `/packaging/installPackage.apexp?p0=04tP3000002E2YfIAK`
+**Core Package :: MCP Admin Friend - v67.0 - 0.2** `/packaging/installPackage.apexp?p0=04tP3000002E2aHIAS`
 
-## Event envelope
+## Input: opening the widget
 
-Input commands and output actions use the same envelope shape:
+The UI tool accepts one optional opening input:
+
+```json
+{
+  "objectApiName": "Opportunity"
+}
+```
+
+When supplied, `objectApiName` selects that accessible Salesforce object as the widget opens and loads its metadata and recent records. When omitted, the widget opens on the Admin tab and the user can select an object in the UI.
+
+This is opening input only. MCP Admin Friend intentionally does not publish a second tool for sending commands to an already-rendered widget, because MCP Apps do not currently define a standard way to address and update an active widget instance.
+
+## Output event envelope
+
+Output actions use this envelope shape:
 
 ```json
 {
@@ -27,64 +41,10 @@ Input commands and output actions use the same envelope shape:
 | --- | --- |
 | `version` | Contract version. Currently `1.0`. |
 | `source` | Name of the sender. |
-| `type` | Command or action type. |
+| `type` | Action type. |
 | `timestamp` | ISO 8601 timestamp. |
 | `correlationId` | Unique ID used to relate actions and errors to a request. |
-| `payload` | JSON object containing command or action data. |
-
-## Input: host to LWC
-
-Dispatch an `adminfriendcommand` event on the Lightning Out component:
-
-```js
-const command = {
-  version: '1.0',
-  source: 'mcpAppHost',
-  type: 'object.select',
-  timestamp: new Date().toISOString(),
-  correlationId: crypto.randomUUID(),
-  payload: {
-    objectApiName: 'Opportunity'
-  }
-};
-
-component.dispatchEvent(
-  new CustomEvent('adminfriendcommand', {
-    bubbles: true,
-    composed: true,
-    detail: JSON.stringify(command)
-  })
-);
-```
-
-When the LWC is used by another Salesforce component in the same context, its public method can also be called directly:
-
-```js
-const result = await component.handleHostAction(JSON.stringify(command));
-```
-
-The method returns a serializable result:
-
-```json
-{
-  "success": true,
-  "type": "object.select",
-  "correlationId": "unique-request-id"
-}
-```
-
-Supported input commands:
-
-| Type | Payload | Result |
-| --- | --- | --- |
-| `context.refresh` | `{}` | Reloads the current user and organization. |
-| `object.select` | `{ "objectApiName": "Opportunity" }` | Selects an accessible object and loads its metadata and recent records. |
-| `metadata.refresh` | `{}` | Reloads metadata for the selected object. |
-| `records.refresh` | `{}` | Reloads recent records for the selected object. |
-| `tab.select` | `{ "tab": "admin" }` | Opens `admin`, `metadata`, or `records`. An object must be selected before opening the latter two. |
-| `ui.notify` | `{ "message": "Message from host" }` | Displays a plain-text message inside the component. |
-
-Malformed or unsupported commands return `success: false` from `handleHostAction` and cause the component to emit `component.error`. When calling this public method through Lightning Out, pass the command as a JSON string. Passing an object can expose an LWS proxy to Lightning Out's `structuredClone()` call.
+| `payload` | JSON object containing action data. |
 
 ## Output: LWC to host
 
@@ -99,17 +59,11 @@ component.addEventListener('adminfriendaction', (event) => {
 
 Every output event is dispatched with `bubbles: true` and `composed: true`. Its `detail` is a JSON string rather than an object. Lightning Web Security can proxy object-valued event details at the global DOM boundary, and Lightning Out cannot pass those proxies through `structuredClone()`. Parse `event.detail` to recover the envelope.
 
-Supported output actions:
+The component dispatches one output action, and only after the user presses **Send record to MCP Client**:
 
 | Type | Payload |
 | --- | --- |
-| `component.ready` | Supported command names and whether user context is available. |
-| `context.loaded` | Current user and organization context. |
-| `context.refreshed` | Refreshed user and organization context. |
-| `object.selected` | Selected object summary and originating action. |
-| `field.selected` | Selected object and field metadata. |
 | `record.selected` | Selected object, record ID, display label, displayed fields, and originating action. |
-| `component.error` | Operation name and a safe display message. |
 
 Example `record.selected` output:
 
@@ -142,7 +96,7 @@ Only fields already loaded for display are included in `record.selected`. The co
 
 ## Lightning Out note
 
-Lightning Out 2.0 mirrors custom events across its iframe boundary. Attach the output listener before the component finishes loading so that the host receives `component.ready`.
+Lightning Out 2.0 mirrors custom events across its iframe boundary. Attach the output listener before the user can press **Send record to MCP Client** so the host receives the resulting `record.selected` event.
 
 ### Run the host over HTTP
 
@@ -189,11 +143,6 @@ Lightning Out maintains a page-level component registry. Start it only once per 
 
 Salesforce documents the required attributes and startup lifecycle in [Lightning Out 2.0 architecture](https://developer.salesforce.com/docs/platform/lwc/guide/lightning-out-architecture.html) and explains how to obtain the URL in [Set Up Authentication for Lightning Out 2.0](https://help.salesforce.com/s/articleView?id=platform.lightning_out_auth.htm&type=5).
 
-The sample host is available in [`examples/host/index.html`](examples/host/index.html). Its action composer provides editable examples for every supported command. Selecting an example fills the action type and JSON payload; either value can then be changed before dispatch. This makes the page useful as a command tester while preserving valid MCP Admin Friend examples.
+The sample host is available in [`examples/host/index.html`](examples/host/index.html). It supplies `Opportunity` as the initial `object-api-name` attribute and records `adminfriendaction` output events.
 
-Its session trace records both directions:
-
-- **Host → LWC** commands dispatched as `adminfriendcommand`
-- **LWC → Host** actions received as `adminfriendaction`
-
-Each entry shows its time, direction, type, correlation ID, and expandable JSON envelope. The trace retains the newest 50 entries in memory, has a **Clear** button, and resets when the page refreshes. Commands, actions, command results, and trace clearing are also written to the browser console with an `[MCP Admin Friend]` prefix.
+Each trace entry shows its time, type, correlation ID, and expandable JSON envelope. The trace retains the newest 50 entries in memory, has a **Clear** button, and resets when the page refreshes. Actions and trace clearing are also written to the browser console with an `[MCP Admin Friend]` prefix.

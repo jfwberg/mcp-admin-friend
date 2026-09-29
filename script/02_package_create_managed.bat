@@ -12,7 +12,7 @@ SET definitionFile=config/project-scratch-def.json
 
 REM Package Config
 SET packageId=0HoP3000000020DKAQ
-SET packageVersionId=04tP3000002D4HZIA0
+SET packageVersionId=04tP3000002E2aHIAS
 
 REM Create package
 sf package create --name "%packageName%" --description "%packageDescription%" --package-type "%packageType%" --path "%packagePath%" --target-dev-hub %devHub%
@@ -22,7 +22,7 @@ sf package version create --package "%packageName%"  --target-dev-hub "%devHub%"
 
 REM Optional lifecycle command reference - run separately when deliberately required:
 REM sf package delete --package %packageId% --target-dev-hub %devHub% --no-prompt
-REM sf package version delete --package %packageVersionId% --target-dev-hub %devHub% --no-prompt
+REM sf package version delete --package  %packageVersionId%" --target-dev-hub %devHub% --no-prompt
 REM sf package version promote --package %packageVersionId% --target-dev-hub %devHub% --no-prompt
 
-REM /packaging/installPackage.apexp?p0=04tP3000002D4HZIA0
+REM /packaging/installPackage.apexp?p0=04tP3000002E2aHIAS

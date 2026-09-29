@@ -10,11 +10,6 @@
         .configuration label { display: grid; gap: 5px; font-weight: 600; }
         .configuration input { box-sizing: border-box; width: 100%; padding: 8px; font: inherit; }
         .configuration small { grid-column: 1 / -1; color: #5c5c5c; }
-        .composer { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(220px, 1fr) auto; gap: 12px; align-items: end; margin: 0 0 16px; padding: 16px; border: 1px solid #c9c9c9; border-radius: 8px; }
-        .composer h2, .composer p, .composer .payload { grid-column: 1 / -1; margin: 0; }
-        .composer label { display: grid; gap: 5px; font-weight: 600; }
-        .composer input, .composer select, .composer textarea { box-sizing: border-box; width: 100%; padding: 8px; font: inherit; }
-        .composer textarea { min-height: 110px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
         main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 20px; }
         #mount { min-height: 600px; border: 1px dashed #888; border-radius: 8px; padding: 8px; }
         .trace-panel { min-width: 0; }
@@ -22,14 +17,13 @@
         #trace { max-height: 540px; overflow: auto; }
         .trace-entry { margin-bottom: 8px; border: 1px solid #c9c9c9; border-radius: 6px; background: #fff; }
         .trace-entry summary { cursor: pointer; padding: 10px; overflow-wrap: anywhere; }
-        .trace-entry[data-direction="host-to-lwc"] summary { border-left: 4px solid #2e844a; }
         .trace-entry[data-direction="lwc-to-host"] summary { border-left: 4px solid #0176d3; }
         .trace-entry pre { margin: 0; padding: 10px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #f3f3f3; }
         .empty { color: #5c5c5c; padding: 12px 0; }
         button { padding: 8px; margin: 4px 0; }
         @media (max-width: 720px) {
-            main, .configuration, .composer { grid-template-columns: 1fr; }
-            .configuration small, .composer h2, .composer p, .composer .payload { grid-column: 1; }
+            main, .configuration { grid-template-columns: 1fr; }
+            .configuration small { grid-column: 1; }
         }
     </style>
 </head>
@@ -45,32 +39,6 @@
         </label>
         <button id="start" type="submit">Start Lightning Out</button>
         <small>Each frontdoor URL can be used for one startup attempt only. Generate a fresh URL after a failed attempt or page refresh. The URL is kept only in memory and is not saved, shown in the trace, or written to the console.</small>
-    </form>
-    <form id="composer" class="composer">
-        <h2>Send a host action</h2>
-        <p>Choose an example, edit its action type or JSON payload, and send it to the component.</p>
-        <label>Example
-            <select id="action-example">
-                <option value="object.select">Select Opportunity</option>
-                <option value="tab.records">Open Recent Records</option>
-                <option value="context.refresh">Refresh Context</option>
-                <option value="metadata.refresh">Refresh Metadata</option>
-                <option value="records.refresh">Refresh Recent Records</option>
-                <option value="tab.admin">Open Admin Tab</option>
-                <option value="tab.metadata">Open Metadata Tab</option>
-                <option value="ui.notify">Show Notification</option>
-                <option value="custom">Custom</option>
-            </select>
-        </label>
-        <label>Action type
-            <input id="action-type" required value="object.select" autocomplete="off" spellcheck="false">
-        </label>
-        <button id="send-action" type="submit" disabled>Send Action</button>
-        <label class="payload">Payload (JSON object)
-            <textarea id="action-payload" required spellcheck="false">{
-  "objectApiName": "Opportunity"
-}</textarea>
-        </label>
     </form>
     <p id="status" role="status">Waiting for your Lightning Out embed configuration.</p>
     <main>
@@ -88,7 +56,6 @@
         const SALESFORCE_COMPONENT_NAME = 'x007-mcp-admin-friend';
         const COMPONENT_TAG_NAME = 'x007-mcp-admin-friend';
         const LIGHTNING_OUT_PATH = '/lightning/lightning.out.latest/index.iife.prod.js';
-        let bridge;
         let lightningOutScriptPromise;
         let startupAttempted = false;
         const trace = [];
@@ -96,20 +63,6 @@
         const status = document.querySelector('#status');
         const mount = document.querySelector('#mount');
         const startButton = document.querySelector('#start');
-        const sendButton = document.querySelector('#send-action');
-        const actionExample = document.querySelector('#action-example');
-        const actionType = document.querySelector('#action-type');
-        const actionPayload = document.querySelector('#action-payload');
-        const ACTION_EXAMPLES = {
-            'object.select': { type: 'object.select', payload: { objectApiName: 'Opportunity' } },
-            'tab.records': { type: 'tab.select', payload: { tab: 'records' } },
-            'context.refresh': { type: 'context.refresh', payload: {} },
-            'metadata.refresh': { type: 'metadata.refresh', payload: {} },
-            'records.refresh': { type: 'records.refresh', payload: {} },
-            'tab.admin': { type: 'tab.select', payload: { tab: 'admin' } },
-            'tab.metadata': { type: 'tab.select', payload: { tab: 'metadata' } },
-            'ui.notify': { type: 'ui.notify', payload: { message: 'Hello from the Lightning Out host' } }
-        };
 
         function displayLifecycleError(prefix, event) {
             const message = event.detail?.message || 'Unknown Lightning Out error.';
@@ -149,7 +102,7 @@
                 details.className = 'trace-entry';
                 details.dataset.direction = entry.direction;
                 const summary = document.createElement('summary');
-                const arrow = entry.direction === 'host-to-lwc' ? 'Host → LWC' : 'LWC → Host';
+                const arrow = 'LWC → Host';
                 const time = new Date(entry.envelope.timestamp).toLocaleTimeString();
                 summary.textContent = `${time} · ${arrow} · ${entry.envelope.type} · ${entry.envelope.correlationId}`;
                 const json = document.createElement('pre');
@@ -164,8 +117,7 @@
             trace.length = Math.min(trace.length, 50);
             renderTrace();
             if (entry.envelope.type === 'component.ready') {
-                status.textContent = 'Salesforce component is ready for commands.';
-                sendButton.disabled = false;
+                status.textContent = 'Salesforce component is ready.';
             }
         }
 
@@ -221,9 +173,9 @@
 
                 await customElements.whenDefined(COMPONENT_TAG_NAME);
                 const component = document.createElement(COMPONENT_TAG_NAME);
+                component.setAttribute('object-api-name', 'Opportunity');
                 component.addEventListener('lo.component.ready', () => {
                     status.textContent = 'MCP Admin Friend is ready.';
-                    sendButton.disabled = false;
                     console.info('[MCP Admin Friend] Lightning Out component ready');
                 });
                 component.addEventListener('lo.component.error', (lifecycleEvent) => {
@@ -231,7 +183,7 @@
                 });
 
                 // The upgraded element can now mirror this listener into the LWC.
-                bridge = attachAdminFriend(component, addTrace);
+                attachAdminFriend(component, addTrace);
                 mount.append(component);
                 status.textContent = 'Establishing the Salesforce session…';
             } catch (error) {
@@ -242,30 +194,6 @@
                 } else {
                     status.textContent += ' Refresh the page before trying again.';
                 }
-            }
-        });
-        function applyExample(key) {
-            const example = ACTION_EXAMPLES[key];
-            if (!example) return;
-            actionType.value = example.type;
-            actionPayload.value = JSON.stringify(example.payload, null, 2);
-        }
-        actionExample.addEventListener('change', () => applyExample(actionExample.value));
-        actionType.addEventListener('input', () => { actionExample.value = 'custom'; });
-        actionPayload.addEventListener('input', () => { actionExample.value = 'custom'; });
-        document.querySelector('#composer').addEventListener('submit', (event) => {
-            event.preventDefault();
-            try {
-                const type = actionType.value.trim();
-                const payload = JSON.parse(actionPayload.value);
-                if (!type) throw new Error('Enter an action type.');
-                if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-                    throw new Error('The payload must be a JSON object.');
-                }
-                const result = bridge.send(type, payload);
-                status.textContent = `Dispatched ${result.type} (${result.correlationId}).`;
-            } catch (error) {
-                status.textContent = `Action was not sent: ${error.message}`;
             }
         });
     </script>
